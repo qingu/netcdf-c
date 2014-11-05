@@ -1,32 +1,27 @@
 ## This is a CMake file, part of Unidata's netCDF package.
 # Copyright 2012-2013, see the COPYRIGHT file for more information.
 
-SET(CMAKE_INCLUDE_CURRENT_DIR ON)
-
-INCLUDE_DIRECTORIES(".")
-
-
 # Process these files with m4.
 SET(m4_SOURCES attr ncx putget t_ncxx)
 foreach (f ${m4_SOURCES})      
- 	       GEN_m4(${f})
+  GEN_m4(${f})
 endforeach(f)
 
 SET(libsrc_SOURCES v1hpg.c putget.c attr.c nc3dispatch.c nc3internal.c var.c dim.c ncx.c lookup3.c ncio.c)
 SET(libsrc_SOURCES ${libsrc_SOURCES} pstdint.h)
 
 IF (BUILD_DISKLESS)
-   SET(libsrc_SOURCES ${libsrc_SOURCES} memio.c)
+  SET(libsrc_SOURCES ${libsrc_SOURCES} memio.c)
 
-   IF (BUILD_MMAP)
-	SET(libsrc_SOURCES ${libsrc_SOURCES} mmapio.c)
-   ENDIF( BUILD_MMAP)
+  IF (BUILD_MMAP)
+    SET(libsrc_SOURCES ${libsrc_SOURCES} mmapio.c)
+  ENDIF( BUILD_MMAP)
 ENDIF (BUILD_DISKLESS)
 
 IF (USE_FFIO)
-   SET(libsrc_SOURCES ${libsrc_SOURCES} ffio.c)
+  SET(libsrc_SOURCES ${libsrc_SOURCES} ffio.c)
 ELSE (USE_FFIO)
-   SET(libsrc_SOURCES ${libsrc_SOURCES} posixio.c)
+  SET(libsrc_SOURCES ${libsrc_SOURCES} posixio.c)
 ENDIF (USE_FFIO)
 
 add_library(netcdf3 OBJECT ${libsrc_SOURCES}) 
@@ -38,21 +33,21 @@ SET(MAN_FILES netcdf.3)
 set(ARGS_MANPAGE -DAPI=C)
 
 IF (USE_NETCDF4)
-	SET(ARGS_MANPAGE ${ARGS_MANPAGE} -DNETCDF4=TRUE)
+  SET(ARGS_MANPAGE ${ARGS_MANPAGE} -DNETCDF4=TRUE)
 ENDIF(USE_NETCDF4)
 
 IF (BUILD_DAP)
-	SET(ARGS_MANPAGE ${ARGS_MANPAGE} -DDAP=TRUE)
+  SET(ARGS_MANPAGE ${ARGS_MANPAGE} -DDAP=TRUE)
 ENDIF(BUILD_DAP)
 
 IF (BUILD_PARALLEL)
-	SET(ARGS_MANPAGE ${ARGS_MANPAGE} -DPARALLEL_IO=TRUE)
+  SET(ARGS_MANPAGE ${ARGS_MANPAGE} -DPARALLEL_IO=TRUE)
 ENDIF(BUILD_PARALLEL)
 
 # Generate the man page.
 IF(NOT MSVC)
 
-  FILE(GLOB libsrc_MANPAGE ${CMAKE_SOURCE_DIR}/man4/netcdf.m4)
+  FILE(GLOB libsrc_MANPAGE ${CMAKE_SOURCE_DIR}/docs/netcdf.m4)
   FILE(COPY ${libsrc_MANPAGE} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
   ADD_CUSTOM_TARGET(manpage ALL

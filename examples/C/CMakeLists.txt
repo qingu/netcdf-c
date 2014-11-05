@@ -1,15 +1,11 @@
-SET(CMAKE_INCLUDE_CURRENT_DIR ON)
-
-INCLUDE_DIRECTORIES(".")
-
 SET(exam_C_tests simple_xy_wr simple_xy_rd sfc_pres_temp_wr sfc_pres_temp_rd pres_temp_4D_wr pres_temp_4D_rd)
 SET(exam_C_tests_source "")
-FOREACH(F ${exam_C_tests}) 
+FOREACH(F ${exam_C_tests})
   set(exam_C_tests_source ${exam_C_test_source} ${F}.c)
 ENDFOREACH()
 
 FOREACH(F ${exam_C_tests})
-	add_bin_test(C_tests ${F})
+  add_bin_test(C_tests ${F})
 ENDFOREACH()
 
 

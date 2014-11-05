@@ -1,6 +1,7 @@
 #!/bin/bash
 #X="-x"
 #NB=1
+#DB=1
 
 if test $# != 0 ; then
 cmds=$@
@@ -10,6 +11,12 @@ HDF5=1
 DAP=1
 #HDF4=1
 #PNETCDF=1
+
+#PAR=1
+
+if test "x$PNETCDF" = x1 ; then
+PAR=1
+fi
 
 #RPC=1
 #PGI=1
@@ -21,18 +28,17 @@ CFLAGS=""
 #CFLAGS="-Wall -Wno-unused-variable -Wno-unused-parameter ${CFLAGS}"
 #CFLAGS="-Wconversion"
 
-FORCE="-i"
-
-#INSTALL=1
+stddir="/usr/local"
 PREFIX=/usr/local
 
-if test "x$cmds" = x ; then
-cmds=""
-#cmds="all"
-#cmds="all check"
-#cmds="all dist"
-#cmds="all distcheck"
-#cmds="$cmds install"
+if test "x${cmds}" = x ; then
+  cmds=""
+else
+for f in $cmds ; do
+  if test "x$f" = "xdistcheck" ; then
+    PREFIX=/tmp/$HOST
+  fi
+done
 fi
 
 # HDF4=>HDF5
@@ -48,48 +54,10 @@ else
 CC=gcc
 fi
 
-# Default cases
-if test -f "/share/ed/local/${HOST}" ; then
-stddir="/share/ed/local/${HOST}"
-else
-stddir="/usr/local"
-fi
-#stddir="/machine/local_szlib"
-stddir="/usr/local"
-
-if test "x$INSTALL" = "x1" ; then
-  if test "x$PREFIX" = x ; then
-   PREFIX="$stddir/${HOST}"
-  fi
-else
-PREFIX="/tmp/local/${HOST}"
-fi
-
 MALLOC_CHECK=""
 
 CPPFLAGS=""
 LDFLAGS=""
-
-if test "x$PGI" = x1 ; then
-CFLAGS="-Msignextend -V -m64 $CFLAGS"
-CPPFLAGS="$CPPFLAGS -DNDEBUG -DpgiFortran"
-LD_LIBRARY_PATH="/usr/local/pgi/linux86-64/11.1/lib:$LD_LIBRARY_PATH"
-PREFIX=/tmp/install/pgi
-fi
-
-if test x$M32 = x1 ; then
-  PREFIX="/tmp/install32/${HOST}"
-  stddir="/share/ed/local/${HOST}_32"
-  CFLAGS="-m32 $CFLAGS"
-elif test x$M64 = x1 ; then
-  PREFIX="/tmp/install64/${HOST}"
-  stddir="/share/ed/local/${HOST}_64"
-  CFLAGS="-m64 $CFLAGS"
-fi
-
-if test "x$HOST" = xyakov ; then
-    stddir="/opt/local"
-fi
 
 CFLAGS="-g -O0 $CFLAGS"
 
@@ -141,12 +109,6 @@ fi
 
 CXXFLAGS="$CPPFLAGS $CXXFLAGS"
 
-
-if test -z "$NB" ; then
-${MAKE} maintainer-clean >/dev/null 2>&1
-if autoreconf -i --force ; then ok=1; else exit ; fi
-fi
-
 FLAGS="--prefix ${PREFIX}"
 #FLAGS="$FLAGS --disable-f77 --disable-f90"
 #FLAGS="$FLAGS --disable-cxx"
@@ -160,7 +122,7 @@ FLAGS="$FLAGS --disable-examples"
 #FLAGS="$FLAGS --enable-large-file-tests"
 #FLAGS="$FLAGS --disable-testsets"
 #FLAGS="$FLAGS --disable-dap-remote-tests"
-FLAGS="$FLAGS --enable-dap-auth-tests"
+#FLAGS="$FLAGS --enable-dap-auth-tests"
 #FLAGS="$FLAGS --enable-doxygen"
 #FLAGS="$FLAGS --enable-logging"
 #FLAGS="$FLAGS --disable-diskless"
@@ -169,9 +131,17 @@ FLAGS="$FLAGS --enable-dap-auth-tests"
 #FLAGS="$FLAGS --with-libcf"
 #valgrind => not shared
 #FLAGS="$FLAGS --enable-valgrind-tests"
+FLAGS="$FLAGS --enable-jna"
 
+if test "x${DB}" = x1 ; then
 FLAGS="$FLAGS --disable-shared"
-#FLAGS="$FLAGS --enable-shared"
+else
+FLAGS="$FLAGS --enable-shared"
+fi
+
+if test "x${PAR}" = x ; then
+FLAGS="$FLAGS --disable-parallel"
+fi
 
 if test "x$HDF5" = "x" ; then
 FLAGS="$FLAGS --disable-netcdf-4"
@@ -219,6 +189,11 @@ export CXXFLAGS
 
 DISTCHECK_CONFIGURE_FLAGS="$FLAGS"
 export DISTCHECK_CONFIGURE_FLAGS
+
+if test -z "$NB" ; then
+${MAKE} maintainer-clean >/dev/null 2>&1
+if autoreconf -i --force ; then ok=1; else exit ; fi
+fi
 
 if test -f Makefile ; then ${MAKE} distclean >/dev/null 2>&1 ; fi
 sh $X ./configure ${FLAGS}

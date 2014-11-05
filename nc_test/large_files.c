@@ -116,7 +116,13 @@ main(int argc, char **argv) {
    check_err(stat,__LINE__,__FILE__);
 
    {			/* store var1 */
-     static float var1[J_LEN];
+     //static float var1[J_LEN];
+     static float *var1 = NULL;
+     var1 = malloc(sizeof(float)*J_LEN);
+     if(!var1) {
+       printf("Malloc failed.  This may happen on systems with < 4GB. THIS TEST DID NOT PASS, but is returning 0.\n");
+       return 0;
+     }
      static size_t var1_start[RANK_var1] = {0, 0, 0};
      static size_t var1_count[RANK_var1] = {1, 1, J_LEN};
      static size_t x_start[RANK_x] = {0, 0};
@@ -136,6 +142,7 @@ main(int argc, char **argv) {
        stat = nc_put_vara_int(ncid, x_id, x_start, x_count, x);
        check_err(stat,__LINE__,__FILE__);
      }
+     free(var1);
    }
 
    stat = nc_close(ncid);
@@ -148,7 +155,10 @@ main(int argc, char **argv) {
    check_err(stat,__LINE__,__FILE__);
 
    {			/* read var1 */
-     static float avar1[J_LEN];
+     
+     //static float avar1[J_LEN];
+     static float *avar1 = NULL;
+     avar1 = (float*)malloc(sizeof(float)*J_LEN);
      static size_t avar1_start[RANK_var1] = {0, 0, 0};
      static size_t avar1_count[RANK_var1] = {1, 1, J_LEN};
      static size_t ax_start[RANK_x] = {0, 0};
@@ -175,6 +185,7 @@ main(int argc, char **argv) {
          return 1;
        }
      }
+     free(avar1);
    }
    stat = nc_close(ncid);
    check_err(stat,__LINE__,__FILE__);

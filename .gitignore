@@ -1,4 +1,10 @@
-build
+### 'Normal' gitignore files.
+ctest.c
+ctest64.c
+debug.txt
+CTestConfig.cmake
+Vagrantfile
+build*
 html
 doxygen*.tmp
 \#*.*\#
@@ -16,3 +22,6 @@ scan-build
 Makefile
 .DS_Store
 build-par
+build_llvm
+.vagrant
+Vagrantfile

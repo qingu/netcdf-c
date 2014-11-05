@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <assert.h>
 #include <netcdf.h>
 #include "generic.h"
 #include "ncgen.h"
@@ -18,6 +19,8 @@ extern int netcdf_flag;
 extern int c_flag;
 extern int fortran_flag;
 
+#define MIN(a,b) (((a) < (b)) ? (a) : (b))
+#define MAX(a,b) (((a) > (b)) ? (a) : (b))
 #define fpr    (void) fprintf
 
 
@@ -32,7 +35,7 @@ tztrim(
     )
 {
     char *cp, *ep;
-    
+
     cp = ss;
     if (*cp == '-')
       cp++;
@@ -60,12 +63,12 @@ gen_load_c(
     )
 {
     int  idim, ival;
-    char *val_string;
-    char *charvalp;
-    short *shortvalp;
-    int *intvalp;
-    float *floatvalp;
-    double *doublevalp;
+    char *val_string = NULL;
+    char *charvalp = NULL;
+    short *shortvalp = NULL;
+    int *intvalp = NULL;
+    float *floatvalp = NULL;
+    double *doublevalp = NULL;
     char stmnt[C_MAX_STMNT];
     size_t stmnt_len;
     char s2[C_MAX_STMNT] = {'\0'};
@@ -87,12 +90,12 @@ gen_load_c(
 		    vars[varnum].lname, vars[varnum].lname);
 	    cline(stmnt);
 	}
-	
+
 	/* load variable with data values using static initialization */
 	sprintf(stmnt, "    static %s %s[] = {",
 		ncctype(vars[varnum].type),
 		vars[varnum].lname);
-	
+
 	stmnt_len = strlen(stmnt);
 	switch (vars[varnum].type) {
 	  case NC_CHAR:
@@ -123,21 +126,26 @@ gen_load_c(
             for (ival = 0; ival < var_len-1; ival++) {
 		switch (vars[varnum].type) {
 		  case NC_BYTE:
-			sprintf(s2, "%d, ", *charvalp++);
+		    assert(charvalp != NULL);
+		    sprintf(s2, "%d, ", *charvalp++);
 		    break;
 		  case NC_SHORT:
-			sprintf(s2, "%d, ", *shortvalp++);
+		    assert(shortvalp != NULL);
+		    sprintf(s2, "%d, ", *shortvalp++);
 		    break;
 		  case NC_INT:
-			sprintf(s2, "%ld, ", (long)*intvalp++);
+		    assert(intvalp != NULL);
+		    sprintf(s2, "%ld, ", (long)*intvalp++);
 		    break;
 		  case NC_FLOAT:
-			sprintf(s2, "%.8g, ", *floatvalp++);
+		    assert(floatvalp != NULL);
+		    sprintf(s2, "%.8g, ", *floatvalp++);
 		    break;
 		  case NC_DOUBLE:
-			sprintf(s2, "%#.16g", *doublevalp++);
-			tztrim(s2);
-			strcat(s2, ", ");
+		    assert(doublevalp != NULL);
+		    sprintf(s2, "%#.16g", *doublevalp++);
+		    tztrim(s2);
+		    strcat(s2, ", ");
 		    break;
 		  default: break;
 		}
@@ -151,33 +159,38 @@ gen_load_c(
 		}
 	    }
 	    for (;ival < var_len; ival++) {
-		switch (vars[varnum].type) {
-		  case NC_BYTE:
-			sprintf(s2, "%d", *charvalp);
-		    break;
-		  case NC_SHORT:
-			sprintf(s2, "%d", *shortvalp);
-		    break;
-		  case NC_INT:
-			sprintf(s2, "%ld", (long)*intvalp);
-		    break;
-		  case NC_FLOAT:
-			sprintf(s2, "%.8g", *floatvalp);
-		    break;
-		  case NC_DOUBLE:
-			sprintf(s2, "%#.16g", *doublevalp++);
-			tztrim(s2);
-		    break;
-		  default: break;
-		}
-		stmnt_len += strlen(s2);
-		if (stmnt_len < C_MAX_STMNT)
-		  strcat(stmnt, s2);
-		else {
-		    cline(stmnt);
-		    strcpy(stmnt,s2);
-		    stmnt_len = strlen(stmnt);
-		}
+	      switch (vars[varnum].type) {
+	      case NC_BYTE:
+		assert(charvalp != NULL);
+		sprintf(s2, "%d", *charvalp);
+		break;
+	      case NC_SHORT:
+		assert(shortvalp != NULL);
+		sprintf(s2, "%d", *shortvalp);
+		break;
+	      case NC_INT:
+		assert(intvalp != NULL);
+		sprintf(s2, "%ld", (long)*intvalp);
+		break;
+	      case NC_FLOAT:
+		assert(floatvalp != NULL);
+		sprintf(s2, "%.8g", *floatvalp);
+		break;
+	      case NC_DOUBLE:
+		assert(doublevalp != NULL);
+		sprintf(s2, "%#.16g", *doublevalp++);
+		tztrim(s2);
+		break;
+	      default: break;
+	      }
+	      stmnt_len += strlen(s2);
+	      if (stmnt_len < C_MAX_STMNT)
+		strcat(stmnt, s2);
+	      else {
+		cline(stmnt);
+		strcpy(stmnt,s2);
+		stmnt_len = strlen(stmnt);
+	      }
 	    }
 	    break;
 	}
@@ -191,7 +204,7 @@ gen_load_c(
 		    (unsigned long)vars[varnum].nrecs, /* number of recs for this variable */
 		    vars[varnum].name);
 	    cline(stmnt);
-	    
+
 	    for (idim = 0; idim < vars[varnum].ndims; idim++) {
 		sprintf(stmnt, "    %s_start[%d] = 0;",
 			vars[varnum].lname,
@@ -207,7 +220,7 @@ gen_load_c(
 		cline(stmnt);
 	    }
 	}
-	
+
 	if (vars[varnum].dims[0] == rec_dim) {
 	    sprintf(stmnt,
 		    "    stat = nc_put_vara_%s(ncid, %s_id, %s_start, %s_count, %s);",
@@ -229,7 +242,7 @@ gen_load_c(
 	sprintf(stmnt, "    static %s %s = ",
 		ncctype(vars[varnum].type),
 		vars[varnum].lname);
-	
+
 	switch (vars[varnum].type) {
 	  case NC_CHAR:
 	    val_string = cstrstr((char *) rec_start, var_len);
@@ -273,7 +286,7 @@ gen_load_c(
     cline("    check_err(stat,__LINE__,__FILE__);");
     cline("   }");
 }
-    
+
 
 /*
  * Add to a partial Fortran statement, checking if it's too long.  If it is too
@@ -289,15 +302,20 @@ fstrcat(
     size_t *slenp			/* pointer to length of source string */
     )
 {
-    *slenp += strlen(t);
-    if (*slenp >= FORT_MAX_STMNT) {
-	derror("FORTRAN statement too long: %s",s);
-	fline(s);
-	strcpy(s, t);
-	*slenp = strlen(s);
-    } else {
-	strcat(s, t);
-    }
+
+  *slenp += strlen(t);
+
+  if (*slenp >= FORT_MAX_STMNT) {
+    derror("FORTRAN statement too long: %s",s);
+    fline(s);
+    strncpy(s, t, FORT_MAX_STMNT);
+    *slenp = strlen(s);
+  } else {
+    /* Suppress a coverity-related issue without actually
+       ignoring it in the coverity dashboard. */
+    /* coverity[unsigned_compare] */
+    strncat(s, t, MAX(0,MIN(strlen(t),strlen(s)-(strlen(t)))));
+  }
 }
 
 /*
@@ -320,7 +338,7 @@ f_var_init(
     size_t stmnt_len;
     char s2[FORT_MAX_STMNT];
     int ival;
-    
+
     /* load variable with data values  */
     sprintf(stmnt, "data %s /",vars[varnum].lname);
     stmnt_len = strlen(stmnt);
@@ -419,7 +437,7 @@ gen_load_fortran(
     } else {
 	v->data_stmnt = fstrstr(rec_start, valnum);
     }
-    
+
     if (v->ndims >0 && v->dims[0] == rec_dim) {
 	return;
     }
@@ -440,7 +458,7 @@ gen_load_fortran(
 		nfftype(v->type), v->lname, char_expr);
 	free(char_expr);
     }
-    
+
     fline(stmnt);
     fline("call check_err(iret)");
 }
@@ -523,7 +541,7 @@ load_netcdf(
 	start[idim] = 0;
 	count[idim] = dims[vars[varnum].dims[idim]].size;
     }
-    
+
     switch (vars[varnum].type) {
       case NC_BYTE:
 	stat = nc_put_vara_schar(ncid, varnum, start, count,

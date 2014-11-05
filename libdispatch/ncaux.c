@@ -72,8 +72,11 @@ ncaux_begin_compound(int ncid, const char *name, int alignmode, void** tagp)
     cmpd->name = strdup(name);    
     if(cmpd->name == NULL) {status = NC_ENOMEM; goto fail;}
 
-    if(tagp) *tagp = (void*)cmpd;
-
+    if(tagp) {
+      *tagp = (void*)cmpd;
+    } else { /* Error, free cmpd to avoid memory leak. */
+      free(cmpd);
+    }
     return status;
 
 fail:
@@ -130,6 +133,8 @@ ncaux_add_field(void* tag,  const char *name, nc_type field_type,
     cmpd->nfields++;
 
 done:
+    if(newfields)
+      free(newfields);
     return status;
 }
 

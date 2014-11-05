@@ -20,15 +20,12 @@
 
 #define TRIMCHARS " \t\r\n"
 
-#define TRIM(x) rctrimright(rctrimleft((x),TRIMCHARS),TRIMCHARS)
-
 #define HTTPPREFIXDEPRECATED "CURL."
 #define HTTPPREFIX           "HTTP."
 
 static int parseproxy(OCstate* state, char* v);
 static int rcreadline(FILE* f, char* more, int morelen);
-static char* rctrimright(char* more, char* trimchars);
-static char* rctrimleft(char* more, char* trimchars);
+static void rctrim(char* text);
 
 static void ocdodsrcdump(char* msg, struct OCTriple*, int ntriples);
 
@@ -50,7 +47,7 @@ occredentials_in_url(const char *url)
 	return 0;
 }
 
-static int
+static OCerror
 ocextract_credentials(const char *url, char **name, char **pw, char **result_url)
 {
 	char *pos;
@@ -84,8 +81,8 @@ ocextract_credentials(const char *url, char **name, char **pw, char **result_url
 		url_len = strlen(url) - up_len;
 
 		*result_url = malloc(sizeof(char) * (url_len + 1));
-		if (!result_url)
-			return OC_ENOMEM;
+		if (*result_url == NULL)
+		    return OC_ENOMEM;
 
 		strncpy(*result_url, url, (size_t)(pos - url));
 		strncpy(*result_url + (pos - url), end + 1, url_len - (pos - url));
@@ -123,26 +120,28 @@ rcreadline(FILE* f, char* more, int morelen)
     return 1;
 }
 
-/* Trim specified characters from front/left */
-static char*
-rctrimleft(char* more, char* trimchars)
+/* Trim TRIMCHARS from both ends of text; */
+static void
+rctrim(char* text)
 {
-    char* p = more;
-    int c;
-    while((c=*p) != '\0') {if(strchr(trimchars,c) != NULL) p++; else break;}
-    return p;
-}
-
-/* Trim specified characters from end/right */
-static char*
-rctrimright(char* more, char* trimchars)
-{
-    int len = strlen(more);
-    char* p = more + (len - 1);
-    while(p != more) {if(strchr(trimchars,*p) != NULL) p--; else break;}
-    /* null terminate */
-    p[1] = '\0';
-    return more;
+    char* p = text;
+    size_t len = strlen(text);
+    int i;
+    /* locate first non-trimchar */
+    for(;*p;p++) {
+       if(strchr(TRIMCHARS,*p) == NULL) break; /* hit non-trim char */
+    }
+    strncpy(text,p,len);
+    len = strlen(text);
+    /* locate last non-trimchar */
+    if(len > 0) {
+	for(i=(len-1);i>=0;i--) {
+            if(strchr(TRIMCHARS,text[i]) == NULL) {
+		text[i+1] = '\0'; /* elide trailing trimchars */
+		break;
+	    }
+	}
+    }
 }
 
 static int
@@ -150,7 +149,8 @@ parseproxy(OCstate* state, char* v)
 {
     char *host_pos = NULL;
     char *port_pos = NULL;
-
+    if(v == NULL)
+      return OC_NOERR; /* nothing there */
     if(strlen(v) == 0) return OC_NOERR; /* nothing there*/
     if (occredentials_in_url(v)) {
         char *result_url = NULL;
@@ -173,8 +173,11 @@ parseproxy(OCstate* state, char* v)
         *port_sep = '\0';
         host_len = strlen(host_pos);
         state->proxy.host = malloc(sizeof(char) * host_len + 1);
-        if (!state->proxy.host)
-            return OC_ENOMEM;
+        if (state->proxy.host == NULL) {
+          if(port_pos) free(port_pos);
+          if(host_pos) free(host_pos);
+          return OC_ENOMEM;
+        }
 
         strncpy(state->proxy.host, host_pos, host_len);
         state->proxy.host[host_len] = '\0';
@@ -183,8 +186,10 @@ parseproxy(OCstate* state, char* v)
     } else {
         size_t host_len = strlen(host_pos);
         state->proxy.host = malloc(sizeof(char) * host_len + 1);
-        if (!state->proxy.host)
-            return OC_ENOMEM;
+        if (state->proxy.host == NULL) {
+          if(host_pos) free(host_pos);
+          return OC_ENOMEM;
+        }
 
         strncpy(state->proxy.host, host_pos, host_len);
         state->proxy.host[host_len] = '\0';
@@ -196,13 +201,13 @@ parseproxy(OCstate* state, char* v)
     state->proxy.port = atoi(v);
     s_len = strlen(v);
     state->proxy.user = malloc(sizeof(char) * s_len + 1);
-    if (!state->proxy.user)
+    if (state->proxy.user == NULL)
         return OC_ENOMEM;
      strncpy(state->proxy.user, v, s_len);
      state->proxy.user[s_len] = '\0';
      p_len = strlen(v);
      state->proxy.password = malloc(sizeof(char) * p_len + 1);
-     if (!state->proxy.password)
+     if (state->proxy.password == NULL)
          return OC_ENOMEM;
      strncpy(state->proxy.password, v, p_len);
      state->proxy.password[p_len] = '\0';
@@ -264,7 +269,7 @@ sorttriplestore(void)
 	nsorted++;
       if(ocdebug > 2)
             ocdodsrcdump("pass:",sorted,nsorted);
-    }    
+    }
 
     memcpy((void*)ocdodsrc->triples,(void*)sorted,sizeof(struct OCTriple)*nsorted);
     free(sorted);
@@ -300,55 +305,55 @@ ocdodsrc_read(char* basename, char* path)
 
     for(;;) {
 	char *line,*key,*value;
+	int c;
         if(!rcreadline(in_file,line0,sizeof(line0))) break;
 	linecount++;
 	if(linecount >= MAXRCLINES) {
 	    oclog(OCLOGERR, ".dodsrc has too many lines");
 	    return 0;
-	}	    	
+	}
 	line = line0;
 	/* check for comment */
-        if (line[0] == '#') continue;
-	/* trim leading blanks */
-	line = rctrimleft(line,TRIMCHARS);
+	c = line[0];
+        if (c == '#') continue;
+	rctrim(line);  /* trim leading and trailing blanks */
 	if(strlen(line) >= MAXRCLINESIZE) {
 	    oclog(OCLOGERR, "%s line too long: %s",basename,line0);
 	    return 0;
-	}	    	
-        /* parse the line */
-	ocdodsrc->triples[ocdodsrc->ntriples].url[0] = '\0'; /*assume no url*/
+	}
+        /* setup */
+	ocdodsrc->triples[ocdodsrc->ntriples].url[0] = '\0';
+	ocdodsrc->triples[ocdodsrc->ntriples].key[0] = '\0';
+	ocdodsrc->triples[ocdodsrc->ntriples].value[0] = '\0';
 	if(line[0] == LTAG) {
 	    char* url = ++line;
 	    char* rtag = strchr(line,RTAG);
 	    if(rtag == NULL) {
 		oclog(OCLOGERR, "Malformed [url] in %s entry: %s",basename,line);
 		continue;
-	    }	    
+	    }
 	    line = rtag + 1;
 	    *rtag = '\0';
-	    /* trim again */
-   	    line = rctrimleft(line,TRIMCHARS);
 	    /* save the url */
-	    strncpy(ocdodsrc->triples[ocdodsrc->ntriples].url,TRIM(url),strlen(url));
+	    strncpy(ocdodsrc->triples[ocdodsrc->ntriples].url,url,MAXRCLINESIZE-1);
+	    rctrim(ocdodsrc->triples[ocdodsrc->ntriples].url);
 	}
-	if(strlen(line)==0) continue; /* empty line */
 	/* split off key and value */
 	key=line;
 	value = strchr(line, '=');
-	if(value == NULL) {
-	    /* add fake '=1' */
-	    if(strlen(line) + strlen("=1") >= MAXRCLINESIZE) {
-		oclog(OCLOGERR, "%s entry too long: %s",basename,line);
-		continue;
-	    }
-	    strncat(line,"=1",2);
-	    value = strchr(line,'=');
+	if(value == NULL)
+	    value = line + strlen(line);
+	else {
+	    *value = '\0';
+	    value++;
 	}
-	if(value == NULL) continue;
-        *value = '\0';
-	value++;
-	strncpy(ocdodsrc->triples[ocdodsrc->ntriples].key,TRIM(key),strlen(key));
-	strncpy(ocdodsrc->triples[ocdodsrc->ntriples].value,TRIM(value),strlen(value));
+	strncpy(ocdodsrc->triples[ocdodsrc->ntriples].key,key,MAXRCLINESIZE-1);
+	if(*value == '\0')
+	    strcpy(ocdodsrc->triples[ocdodsrc->ntriples].value,"1");/*dfalt*/
+	else
+	    strncpy(ocdodsrc->triples[ocdodsrc->ntriples].value,value,MAXRCLINESIZE-1);
+	rctrim(	ocdodsrc->triples[ocdodsrc->ntriples].key);
+	rctrim(	ocdodsrc->triples[ocdodsrc->ntriples].value);
 	ocdodsrc->ntriples++;
     }
     fclose(in_file);
@@ -360,7 +365,7 @@ int
 ocdodsrc_process(OCstate* state)
 {
     int stat = 0;
-    char* value;
+    char* value = NULL;
     char* url = ocuribuild(state->uri,NULL,NULL,OCURIENCODE);
     struct OCTriplestore* ocdodsrc = ocglobalstate.ocdodsrc;
 
@@ -382,22 +387,22 @@ ocdodsrc_process(OCstate* state)
             oclog(OCLOGNOTE,"curl.timeout: %ld", state->curlflags.timeout);
     }
     if((value = curllookup("USERAGENT",url)) != NULL) {
-        if(atoi(value)) state->curlflags.useragent = strdup(TRIM(value));
-        if(!state->curlflags.useragent) {stat = OC_ENOMEM; goto done;}
+        if(atoi(value)) state->curlflags.useragent = strdup(value);
+        if(state->curlflags.useragent == NULL) {stat = OC_ENOMEM; goto done;}
         if(ocdebug > 0)
             oclog(OCLOGNOTE,"USERAGENT: %s", state->curlflags.useragent);
     }
 
     if((value = curllookup("COOKIEJAR",url))
        || (value = curllookup("COOKIE_JAR",url))) {
-        state->curlflags.cookiejar = strdup(TRIM(value));
-        if(!state->curlflags.cookiejar) {stat = OC_ENOMEM; goto done;}
+        state->curlflags.cookiejar = strdup(value);
+        if(state->curlflags.cookiejar == NULL) {stat = OC_ENOMEM; goto done;}
         if(ocdebug > 0)
             oclog(OCLOGNOTE,"COOKIEJAR: %s", state->curlflags.cookiejar);
     }
 
     if((value = curllookup("PROXY_SERVER",url)) != NULL) {
-        stat = parseproxy(state,TRIM(value));
+        stat = parseproxy(state,value);
         if(stat != OC_NOERR) goto done;
     }
 
@@ -408,22 +413,22 @@ ocdodsrc_process(OCstate* state)
     }
 
     if((value = curllookup("SSL.CERTIFICATE",url)) != NULL) {
-        state->ssl.certificate = strdup(TRIM(value));
-        if(!state->ssl.certificate) {stat = OC_ENOMEM; goto done;}
+        state->ssl.certificate = strdup(value);
+        if(state->ssl.certificate == NULL) {stat = OC_ENOMEM; goto done;}
         if(ocdebug > 0)
             oclog(OCLOGNOTE,"CREDENTIALS.SSL.CERTIFICATE: %s", state->ssl.certificate);
     }
 
     if((value = curllookup("SSL.KEY",url)) != NULL) {
-        state->ssl.key = strdup(TRIM(value));
-        if(!state->ssl.key) {stat = OC_ENOMEM; goto done;}
+        state->ssl.key = strdup(value);
+        if(state->ssl.key == NULL) {stat = OC_ENOMEM; goto done;}
         if(ocdebug > 0)
             oclog(OCLOGNOTE,"CREDENTIALS.SSL.KEY: %s", state->ssl.key);
     }
 
     if((value = curllookup("SSL.KEYPASSWORD",url)) != NULL) {
-        state->ssl.keypasswd = strdup(TRIM(value));
-        if(!state->ssl.keypasswd) {stat = OC_ENOMEM; goto done;}
+        state->ssl.keypasswd = strdup(value);
+        if(state->ssl.keypasswd == NULL) {stat = OC_ENOMEM; goto done;}
 #ifdef INSECURE
         if(ocdebug > 0)
             oclog(OCLOGNOTE,"CREDENTIALS.SSL.KEYPASSWORD: %s", state->ssl.keypasswd);
@@ -431,21 +436,21 @@ ocdodsrc_process(OCstate* state)
     }
 
     if((value = curllookup("SSL.CAINFO",url)) != NULL) {
-        state->ssl.cainfo = strdup(TRIM(value));
-        if(!state->ssl.cainfo) {stat = OC_ENOMEM; goto done;}
+        state->ssl.cainfo = strdup(value);
+        if(state->ssl.cainfo == NULL) {stat = OC_ENOMEM; goto done;}
         if(ocdebug > 0)
             oclog(OCLOGNOTE,"SSL.CAINFO: %s", state->ssl.cainfo);
     }
 
     if((value = curllookup("SSL.CAPATH",url)) != NULL) {
-        state->ssl.capath = strdup(TRIM(value));
-        if(!state->ssl.capath) {stat = OC_ENOMEM; goto done;}
+        state->ssl.capath = strdup(value);
+        if(state->ssl.capath == NULL) {stat = OC_ENOMEM; goto done;}
         if(ocdebug > 0)
             oclog(OCLOGNOTE,"SSL.CAPATH: %s", state->ssl.capath);
     }
 
     if((value = curllookup("SSL.VERIFYPEER",url)) != NULL) {
-	char* s = strdup(TRIM(value));
+        char* s = strndup(value,strlen(value));
 	int tf = 0;
 	if(s == NULL || strcmp(s,"0")==0 || strcasecmp(s,"false")==0)
 	    tf = 0;
@@ -455,27 +460,45 @@ ocdodsrc_process(OCstate* state)
 	    tf = 1; /* default if not null */
         state->ssl.verifypeer = tf;
         if(ocdebug > 0)
-            oclog(OCLOGNOTE,"SSL.VERIFYPEER: %d", state->ssl.verifypeer);
+	  oclog(OCLOGNOTE,"SSL.VERIFYPEER: %d", state->ssl.verifypeer);
+	if(s) free(s);
     }
 
     if((value = curllookup("CREDENTIALS.USER",url)) != NULL) {
-        state->creds.username = strdup(TRIM(value));
-        if(!state->creds.username) {stat = OC_ENOMEM; goto done;}
+        state->creds.username = strdup(value);
+        if(state->creds.username == NULL) {stat = OC_ENOMEM; goto done;}
         if(ocdebug > 0)
             oclog(OCLOGNOTE,"CREDENTIALS.USER: %s", state->creds.username);
     }
 
     if((value = curllookup("CREDENTIALS.PASSWORD",url)) != NULL) {
-        state->creds.password = strdup(TRIM(value));
-        if(!state->creds.password) {stat = OC_ENOMEM; goto done;}
+        state->creds.password = strdup(value);
+        if(state->creds.password == NULL) {stat = OC_ENOMEM; goto done;}
     }
-    /* else ignore */    
+
+    /* Support combined case */
+    if((value = curllookup("CREDENTIALS.USERPASSWORD",url)) != NULL) {
+	char* combined  = value;
+		char* sep = NULL;
+        if(combined == NULL) {stat = OC_ENOMEM; goto done;}
+		sep = (char*)strchr(combined,':');
+        if(sep == NULL) {
+            oclog(OCLOGERR,"CREDENTIALS.USERPASSWORD: no ':' found");
+	    stat = OC_EINVAL;
+            goto done;
+        }
+	*sep = '\0';
+        state->creds.username = strdup(combined);
+        state->creds.password = strdup(sep+1);
+    }
+
+    /* else ignore */
 
 done:
     if(url != NULL) free(url);
     return stat;
 }
-    
+
 char*
 ocdodsrc_lookup(char* key, char* url)
 {
@@ -501,7 +524,7 @@ ocdodsrc_lookup(char* key, char* url)
 	if(found) {
 	    fprintf(stderr,"lookup %s: [%s]%s = %s\n",url,triple->url,triple->key,triple->value);
 	}
-    }    
+    }
     return (found ? triple->value : NULL);
 }
 
@@ -527,7 +550,9 @@ ocdodsrcdump(char* msg, struct OCTriple* triples, int ntriples)
     }
 }
 
-/* Isolate the "CURL." prefix to allow changing to something else */
+/* Isolate the "HTTP." (or "CURL.")
+   prefix to allow changing to something else
+*/
 static char*
 curllookup(char* suffix, char* url)
 {

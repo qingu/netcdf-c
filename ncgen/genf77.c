@@ -852,12 +852,9 @@ static void
 genf77_writeattr(Generator* generator, Symbol* asym, Bytebuffer* code,
 	       int rank, size_t* start, size_t* count)
 {
-    Datalist* list;
     Symbol* basetype = asym->typ.basetype;
-    size_t len = asym->data->length; /* default assumption */
-
-    list = asym->data;
-    len = list==NULL?0:list->length;
+    /* default assumption */
+    size_t len = asym->data==NULL?0:asym->data->length;
 
     bbprintf0(stmt,"* define %s\n",asym->name);
     codedump(stmt);
